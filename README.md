@@ -25,8 +25,8 @@ SillyTavern is an excellent frontend for creative writing and roleplay, but it s
 
 - OpenAI-compatible `/v1/chat/completions` endpoint (SillyTavern just points at it)
 - GUI dashboard at `http://localhost:5001/` with tabs for Settings, System Prompt, Tools, Lorebook, Memory, and Test
-- **Model picker** — Opus 4.7, Opus 4.6, or Sonnet, selected in the bridge GUI (SillyTavern's model selector is ignored)
-- **Effort levels** — Low / Medium / High / xHigh / Max for the Claude CLI's reasoning budget. xHigh and Max require Opus 4.7; older models clamp down automatically. Sonnet is also clamped because it produces no narrative above Medium.
+- **Model picker** — Opus 4.8, Opus 4.6, or Sonnet, selected in the bridge GUI (SillyTavern's model selector is ignored)
+- **Effort levels** — Low / Medium / High / xHigh / Max for the Claude CLI's reasoning budget. xHigh and Max require Opus; Sonnet is clamped to Medium as it produces no meaningful narrative above that level.
 - **Character Memory** — structured per-character SQLite + sentence-transformers embeddings + Sonnet librarian. Tracks desires, events, facts, rules, relationships, traits, places, possessions, body state, and secrets across sessions. Sonnet curates relevant memories before each Opus turn (in-band) and updates the DB after (background). Persistent NPCs introduced mid-RP get their own sub-DBs. Inspect/edit everything in the Memory tab. See `MEMORY_DESIGN.md` for the architecture.
 - **Per-character auto-summary** — each character's narrative digest lives in its own cache slot, keyed by a hash of the greeting. Switching characters auto-swaps summaries; no manual cache clearing.
 - **CLI session reuse** — captures the Claude CLI's session and resumes via `--resume` on follow-up turns, sending only the latest user message instead of the full history. Big input-token savings on long RPs. Auto-invalidates on swipes, edits, or prefix changes.
