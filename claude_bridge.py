@@ -1916,7 +1916,7 @@ runtime_settings = {
     "debug_output": DEBUG_RAW_OUTPUT,
     # Simple chunking toggle (one-shot)
     "chunking_enabled": False,
-    # Model selection: "opus" (latest, 4.8), "claude-opus-4-7" (prior Opus), or "sonnet"
+    # Model selection: "opus" (latest), "claude-opus-4-8", "claude-opus-4-7", "claude-opus-4-6", or "sonnet"
     "model": "opus",
     # Tool calling support for extensions like TunnelVision
     "tool_calling_enabled": True,
