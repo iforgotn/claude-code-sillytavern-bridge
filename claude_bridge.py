@@ -28,7 +28,7 @@ from flask_cors import CORS
 # they're behind. Keeping it in the source file (rather than deriving
 # from git) means it Just Works for users who download a zip instead of
 # cloning — no git metadata required at runtime.
-__version__ = "1.3.0"
+__version__ = "1.3.1"
 
 # =============================================================================
 # CLAUDE CLI RESOLUTION
@@ -340,7 +340,7 @@ Match the level of detail and tone to the scene above. If the scene is intimate 
         )
 
         # Send prompt and get output
-        stdout, stderr = process.communicate(input=prompt, timeout=120)
+        stdout, stderr = process.communicate(input=prompt, timeout=300)
 
         if stderr:
             log(f"Image describe stderr: {stderr[:200]}", "WARN")
@@ -1783,7 +1783,7 @@ CORS(app)  # Enable CORS for SillyTavern
 # CONFIGURATION - Edit these settings as needed
 # =============================================================================
 
-DEFAULT_MODEL = "claude-opus-4-7"  # Model name to report
+DEFAULT_MODEL = "claude-opus-4-8"  # Model name to report
 
 # Default bridge system prompt. Single source of truth for both the request
 # handler (via runtime_settings.system_prompt_override fallback) and the GUI
@@ -1916,7 +1916,7 @@ runtime_settings = {
     "debug_output": DEBUG_RAW_OUTPUT,
     # Simple chunking toggle (one-shot)
     "chunking_enabled": False,
-    # Model selection: "opus" (latest, 4.7), "claude-opus-4-6" (prior Opus), or "sonnet"
+    # Model selection: "opus" (latest, 4.8), "claude-opus-4-7" (prior Opus), or "sonnet"
     "model": "opus",
     # Tool calling support for extensions like TunnelVision
     "tool_calling_enabled": True,
@@ -2328,12 +2328,16 @@ def _msg_text(m: dict) -> str:
 
 def _per_msg_prefix_sigs(messages: list, prefix_count: int) -> list:
     """Build the per-message signatures used by both the prefix hash and the
-    diagnostic. Returns a list of `<role-initial>:<first-200-chars>` strings,
+    diagnostic. Returns a list of `<role-initial>:<first-150-chars>|<last-100-chars>|<len>` strings,
     one per user/assistant message up to prefix_count. Pass a very large
     prefix_count (e.g. 10**9) to get all user/asst sigs in the messages list.
     System messages are skipped because ST churns them every turn (lorebook
     entries, persona notes etc.) and that churn is benign — only
-    user/assistant content edits should invalidate the session."""
+    user/assistant content edits should invalidate the session.
+
+    Using both start and end of message + length catches edits to the end
+    of responses (cutting content short) which would be invisible if we
+    only hashed the first N characters."""
     sigs = []
     count = 0
     for m in messages:
@@ -2341,7 +2345,13 @@ def _per_msg_prefix_sigs(messages: list, prefix_count: int) -> list:
             continue
         if count >= prefix_count:
             break
-        sigs.append(f"{m['role'][0]}:{_msg_text(m)[:200]}")
+        text = _msg_text(m)
+        # Use first 150 + last 100 chars + total length
+        # This catches edits at both ends and length changes
+        first = text[:150]
+        last = text[-100:] if len(text) > 100 else text
+        length = len(text)
+        sigs.append(f"{m['role'][0]}:{first}|{last}|{length}")
         count += 1
     return sigs
 
@@ -2944,6 +2954,20 @@ Use the Read tool to view each, then weave the visual details into your scene wi
     resume_char_key = None
     resume_session_id = None
     resume_reason = "disabled by setting"
+
+    # Extract SCENE IMAGES block before resume logic might overwrite prompt
+    # This ensures image context is preserved when resuming sessions.
+    scene_images_block = ""
+    if image_descriptions or images_needing_inline_read:
+        # Find the SCENE IMAGES block in the current prompt
+        match = re.search(
+            r'=== SCENE IMAGES.*?=== END SCENE IMAGES',
+            prompt,
+            re.DOTALL
+        )
+        if match:
+            scene_images_block = match.group(0)
+
     if runtime_settings.get("cli_session_reuse", True):
         resume_char_key, resume_session_id, resume_reason = _decide_resume(track, char_key_override=char_key)
         if resume_session_id:
@@ -2951,7 +2975,12 @@ Use the Read tool to view each, then weave the visual details into your scene wi
                 log(f"Resuming CLI session for [{resume_char_key}] ({resume_session_id[:8]}...): {resume_reason}", "INFO")
             latest_user = _extract_latest_user_text(messages)
             if latest_user.strip():
-                prompt = latest_user
+                # When resuming, prepend SCENE IMAGES block to user message
+                # so GLM has the visual context even in resumed sessions.
+                if scene_images_block:
+                    prompt = f"{scene_images_block}\n\n{latest_user}"
+                else:
+                    prompt = latest_user
             else:
                 # No user message to send — fall back to full prompt.
                 log("Resume aborted: no latest user message text", "WARN")
